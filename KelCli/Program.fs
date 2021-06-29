@@ -6,9 +6,11 @@ open NetKel103.Wire
 open System.Net
 
 type Measure =
-    | Volt = 1
+    | Voltage = 1
     | Current = 2
-    | Watts  = 3
+    | Power = 3
+    | Running = 4
+    | BatteryCapacity = 5
 
 type Arguments =
     | Ip of host:string * port:int
@@ -32,16 +34,27 @@ let main argv =
         |> Option.map (fun (ip, port) -> IPEndPoint(IPAddress.Parse(ip), port))
         |> Option.get
     use client = new ExperimentalUdpClient(c)
-
-    //  Seq.initInfinite (fun _ -> Console.ReadLine ()) 
-    //    |> Seq.takeWhile (String.IsNullOrWhiteSpace >> not)
-    //    |> Seq.map (sprintf "%s\n")
-    //    |> Seq.map b.Raw
-    //    |> Seq.iter (printfn "%s")
-    match (client.Query(MeasureVoltage), client.Query(MeasureAmp), client.Query(MeasurePower)) with
-    | (FloatWithUnitValue (v, _), FloatWithUnitValue (a, _), FloatWithUnitValue (w,_)) -> 
-        printfn "%s %fA %fV %fW" (DateTime.Now.ToLongTimeString()) a v w
-        0
-    | _ -> 
-        printfn "failed"
-        1
+    
+    let sample = cmd.TryGetResult(Sample) |> Option.defaultValue List.empty
+    if(sample |> List.isEmpty |> not) then 
+        let measurements = [
+            (Measure.Voltage, MeasureVoltage, "voltage", "V")
+            (Measure.Current, MeasureAmp, "current", "A")
+            (Measure.Power, MeasurePower, "watts", "W")
+            (Measure.Running, Input, "running", "")
+            (Measure.BatteryCapacity, BatteryCapacity, "batt-ah", "A")
+        ]
+        let a = 
+            measurements
+                |> List.filter (fun (x,_,_,_) -> List.contains x sample)
+                |> Seq.map (fun (_,cmd,c,d) -> (client.Query(cmd),c,d))
+                //|> Seq.takeWhile (fun (x,_,_) -> )
+                |> Seq.map (fun (response,c,d) -> 
+                    match response with
+                    | FloatWithUnitValue(x, _) -> sprintf "%s: %g%s" c x d
+                    | OnOffValue x -> sprintf "%s: %s" c (if x = On then "on" else "off")
+                    | _ -> sprintf "%s: Error" c
+                )
+                |> (fun x -> (String.Join(", ", x)))
+        printfn "%s %s" (DateTime.Now.ToLongTimeString()) a
+    0
