@@ -114,12 +114,12 @@ module Wire =
             static member Mapping = [("ON", On);("OFF", Off)] |> Map.ofList
             static member Parse s = Map.find s OnOff.Mapping
     
-    type Measure = | A | V | W | Ohm
+    type Measure = | A | Ah | V | W | Ohm
         with 
-            static member Mapping = [("A", A);("V", V);("W", W);("OHM", Ohm)] |> Map.ofList
+            static member Mapping = [("A", A);("AH", Ah);("V", V);("W", W);("OHM", Ohm)] |> Map.ofList
             static member Parse s = Map.find s Measure.Mapping
             static member ParseSpecial s = 
-                let mtch = Regex("^(?<number>(\d|\.)+)(?<unit>A|V|W|OHM)$").Match(s)
+                let mtch = Regex("^(?<number>(\d|\.)+)(?<unit>A|V|W|OHM|AH)$").Match(s)
                 (mtch.Groups.["number"].Value |> float, mtch.Groups.["unit"].Value |> Measure.Parse)
 
     type Mode = | Cc | Cv | Cr | Cw

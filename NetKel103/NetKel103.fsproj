@@ -6,6 +6,7 @@
 
   <ItemGroup>
     <Compile Include="Kel103.fs" />
+    <Compile Include="Unfinished.fs" />
   </ItemGroup>
 
 </Project>
