@@ -61,53 +61,57 @@ module Wire =
         | KeypadLock
         | UndocumentedComp
         | UndocumentedExit
- 
-    let private doDef = function
-        | ProductInformation        -> ("*IDN",          Get(Text))
-        | StoreToUnit               -> ("*SAV",          Set) //<NR1> 1-100
-        | RecallStorageUnit         -> ("*RCL",          Set) //<NR1> 1-100
-        | SimulateExternalTrigger   -> ("*TRG",          Set) 
-        | SystemBuzzer              -> (":SYST:BEEP",    Both(OnOff))
-        | SystemBaud                -> (":SYST:BAUD",    Both(Numeric))
-        | DeviceStatus              -> (":STAT",         Get(Text)) //The first byte is the buzzer status and the second byte is the baud rate; other bytes are to be determined.
-        | Input                     -> (":INP",          Both(OnOff))
-        | Voltage                   -> (":VOLT",         Both(NumericWithUnit)) //Changes Func Cv
-        | VoltageMax                -> (":VOLT:UPP",     Both(NumericWithUnit))
-        | VoltageMin                -> (":VOLT:LOW",     Both(NumericWithUnit))
-        | Current                   -> (":CURR",         Both(NumericWithUnit)) //Changes Func Cc
-        | CurrentMax                -> (":CURR:UPP",     Both(NumericWithUnit))
-        | CurrentMin                -> (":CURR:LOW",     Both(NumericWithUnit))
-        | Resistance                -> (":RES",          Both(NumericWithUnit)) //Changes Func Cr
-        | ResistanceMax             -> (":RES:UPP",      Both(NumericWithUnit))
-        | ResistanceMin             -> (":RES:LOW",      Both(NumericWithUnit))
-        | Power                     -> (":POW",          Both(NumericWithUnit)) //Changes Func Cw
-        | PowerMax                  -> (":POW:UPP",      Both(NumericWithUnit))
-        | PowerMin                  -> (":POW:LOW",      Both(NumericWithUnit))
-        | Function                  -> (":FUNC",         Both(Mode)) //Only can switch CV, CC, CR, CW. Can query CV, CC, CR, CW, that in continuous mode, pulse, flip, battery and all the other modes.
-        | MeasureVoltage            -> (":MEAS:VOLT",    Get(NumericWithUnit))
-        | MeasureAmp                -> (":MEAS:CURR",    Get(NumericWithUnit))
-        | MeasurePower              -> (":MEAS:POW",     Get(NumericWithUnit))
-        | OutputAllSteps            -> (":LIST",         Set) 
-        | RecallList                -> (":RCL:LIST",     Both(Text)) //Recall the query unit before query, or an unknown condition occurs.
-        | OutputAllStepsOcp         -> (":OCP",          Set)
-        | RecallOcp                 -> (":RCL:OCP",      Both(Text))
-        | OutputAllStepsOpp         -> (":OPP",          Set)
-        | RecallOpp                 -> (":RCL:OPP",      Both(Text))
-        | OutputAllStepsBattery     -> (":BATT",         Set)
-        | RecallBattery             -> (":RCL:BATT",     Both(Text))
-        | BatteryTime               -> (":BATT:TIM",     Get(NumericWithUnit))
-        | BatteryCapacity           -> (":BATT:CAP",     Get(NumericWithUnit))
-        | DynamicTestMode           -> (":DYN",          Both(Text))
-        | SystemIpAddress           -> (":SYST:IPAD",    Both(Text))
-        | SystemSubnetMask          -> (":SYST:SMASK",   Both(Text))
-        | SystemGateway             -> (":SYST:GATE",    Both(Text))
-        | SystemDhcp                -> (":SYST:DHCP",    Both(Numeric))
-        | SystemMacAddress          -> (":SYST:MAC",     Get(Text))
-        | SystemPort                -> (":SYST:PORT",    Both(Numeric))
-        | SystemDeviceInfo          -> (":SYST:DEVINFO", Get(Text))
-        | KeypadLock                -> (":SYST:LOCK",    Both(OnOff)) 
-        | UndocumentedComp          -> (":COMP",         Both(Text)) 
-        | UndocumentedExit          -> (":EXIT",         Both(Text)) //ON|OFF
+
+    let knownCommands = [
+        (ProductInformation      ,"*IDN",          Get(Text))
+        (StoreToUnit             ,"*SAV",          Set) //<NR1> 1-100
+        (RecallStorageUnit       ,"*RCL",          Set) //<NR1> 1-100
+        (SimulateExternalTrigger ,"*TRG",          Set) 
+        (SystemBuzzer            ,":SYST:BEEP",    Both(OnOff))
+        (SystemBaud              ,":SYST:BAUD",    Both(Numeric))
+        (DeviceStatus            ,":STAT",         Get(Text)) //The first byte is the buzzer status and the second byte is the baud rate; other bytes are to be determined.
+        (Input                   ,":INP",          Both(OnOff))
+        (Voltage                 ,":VOLT",         Both(NumericWithUnit)) //Changes Func Cv
+        (VoltageMax              ,":VOLT:UPP",     Both(NumericWithUnit))
+        (VoltageMin              ,":VOLT:LOW",     Both(NumericWithUnit))
+        (Current                 ,":CURR",         Both(NumericWithUnit)) //Changes Func Cc
+        (CurrentMax              ,":CURR:UPP",     Both(NumericWithUnit))
+        (CurrentMin              ,":CURR:LOW",     Both(NumericWithUnit))
+        (Resistance              ,":RES",          Both(NumericWithUnit)) //Changes Func Cr
+        (ResistanceMax           ,":RES:UPP",      Both(NumericWithUnit))
+        (ResistanceMin           ,":RES:LOW",      Both(NumericWithUnit))
+        (Power                   ,":POW",          Both(NumericWithUnit)) //Changes Func Cw
+        (PowerMax                ,":POW:UPP",      Both(NumericWithUnit))
+        (PowerMin                ,":POW:LOW",      Both(NumericWithUnit))
+        (Function                ,":FUNC",         Both(Mode)) //Only can switch CV, CC, CR, CW. Can query CV, CC, CR, CW, that in continuous mode, pulse, flip, battery and all the other modes.
+        (MeasureVoltage          ,":MEAS:VOLT",    Get(NumericWithUnit))
+        (MeasureAmp              ,":MEAS:CURR",    Get(NumericWithUnit))
+        (MeasurePower            ,":MEAS:POW",     Get(NumericWithUnit))
+        (OutputAllSteps          ,":LIST",         Set) 
+        (RecallList              ,":RCL:LIST",     Both(Text)) //Recall the query unit before query, or an unknown condition occurs.
+        (OutputAllStepsOcp       ,":OCP",          Set)
+        (RecallOcp               ,":RCL:OCP",      Both(Text))
+        (OutputAllStepsOpp       ,":OPP",          Set)
+        (RecallOpp               ,":RCL:OPP",      Both(Text))
+        (OutputAllStepsBattery   ,":BATT",         Set)
+        (RecallBattery           ,":RCL:BATT",     Both(Text))
+        (BatteryTime             ,":BATT:TIM",     Get(NumericWithUnit))
+        (BatteryCapacity         ,":BATT:CAP",     Get(NumericWithUnit))
+        (DynamicTestMode         ,":DYN",          Both(Text))
+        (SystemIpAddress         ,":SYST:IPAD",    Both(Text))
+        (SystemSubnetMask        ,":SYST:SMASK",   Both(Text))
+        (SystemGateway           ,":SYST:GATE",    Both(Text))
+        (SystemDhcp              ,":SYST:DHCP",    Both(Numeric))
+        (SystemMacAddress        ,":SYST:MAC",     Get(Text))
+        (SystemPort              ,":SYST:PORT",    Both(Numeric))
+        (SystemDeviceInfo        ,":SYST:DEVINFO", Get(Text))
+        (KeypadLock              ,":SYST:LOCK",    Both(OnOff)) 
+        (UndocumentedComp        ,":COMP",         Both(Text)) 
+        (UndocumentedExit        ,":EXIT",         Both(Text)) //ON|OFF
+    ]
+
+    let private doDef (cmd:Commands) = 
+        knownCommands |> List.filter (fun (x, _, _) -> cmd = x) |> List.map (fun (_,y,z) -> (y,z)) |> List.exactlyOne
 
     type OnOff = | On | Off
         with 
