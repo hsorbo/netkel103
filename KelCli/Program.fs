@@ -21,12 +21,14 @@ type Arguments =
     | Serial of serial:string * baud:int
     | Get of string list
     | Repl
+    | Net_Detect
     interface IArgParserTemplate with
         member s.Usage =
             match s with
             | Repl -> "REPL"
             | Serial _ -> "Serial connection"
             | Ip _ -> "Network connection"
+            | Net_Detect -> "Search network"
             | Get _ -> 
                 let join (separator:string) (strings: string seq) = String.Join(separator, strings)
                 queryCommands |> List.map (fun x -> sprintf "%A" x.Command) |> join "\n"
@@ -63,13 +65,14 @@ let main argv =
     let parser = ArgumentParser.Create<Arguments>(programName = "kelcli", errorHandler = errorHandler)
     let cmd = parser.ParseCommandLine ()  
     
-    let c = 
+    let getNetworkEndpoint () = 
         cmd.TryGetResult Ip 
         |> Option.map (fun (ip, port) -> IPEndPoint(IPAddress.Parse(ip), port))
         |> Option.get
-    use client = new ExperimentalUdpClient(c)
-    
-    if(cmd.Contains(Repl)) then
+    if(cmd.Contains(Net_Detect)) then
+        NetworkDetect.detect (IPAddress.Parse("10.0.1.255")) |> printfn "%A"
+    elif(cmd.Contains(Repl)) then
+        use client = new ExperimentalUdpClient(getNetworkEndpoint ())
         repl client
     elif(cmd.Contains(Get)) then
         let getList = cmd.TryGetResult(Get) |> Option.defaultValue List.empty
@@ -79,14 +82,8 @@ let main argv =
             then queryCommands |> List.map (fun x -> x.Command)
             else getList |> List.map fromString<Commands> |> List.choose id |> List.distinct
         for cmd in getList' do
+            use client = new ExperimentalUdpClient(getNetworkEndpoint ())
             let response = client.Query(cmd)
-            let r = 
-                match response with
-                | FloatWithUnitValue(x, d) -> sprintf "%g%A"x d
-                | OnOffValue x -> sprintf "%s" (if x = On then "on" else "off")
-                | StringValue x -> sprintf "%s" x
-                | Nothing -> sprintf "Nothing"
-                | _ -> sprintf "Error %A" response
-            printfn "%A: %s" cmd r
+            printfn "%A: %s" cmd (CommandValue.asString response)
         ()
     0

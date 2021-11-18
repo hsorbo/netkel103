@@ -6,23 +6,43 @@ open System.Net.Sockets
 open NetKel103.Wire
 // https://www.eevblog.com/forum/testgear/review-of-the-korad-kel103-programmable-load/?all
 
+module UdpUtils =
+    let read (udpClient:UdpClient) = 
+        let mutable local = IPEndPoint(0, 0)
+        try
+            //Some(local, udpClient.Receive(&local))
+            udpClient.Receive(&local) |> Some
+        with 
+            | :? SocketException as ex when ex.ErrorCode = 60 -> None
+    
+    let readMany udpClient =
+        Seq.initInfinite (fun _ -> read udpClient) |> Seq.takeWhile Option.isSome |> Seq.choose id
+
+    //let readManyStrings (encoding:Text.Encoding) udpClient = readMany udpClient |> Seq.map encoding.GetString
+    //let readManyAscii x = readManyStrings Encoding.ASCII x
+module NetworkDetect = 
+    let detect (broadcastAddress : IPAddress) =
+        let encoding =  Encoding.ASCII
+        use udpClient = new UdpClient()
+        udpClient.Client.Bind(IPEndPoint(IPAddress.Any, 18191))
+        udpClient.Client.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.Broadcast, 1);
+        udpClient.Client.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.DontRoute, 1);
+        let s = encoding.GetBytes "find_ka000"
+        udpClient.Send(s, IPEndPoint(broadcastAddress, 18191)) |> ignore
+        udpClient.Client.ReceiveTimeout <- 1000;
+        udpClient 
+            |> UdpUtils.readMany 
+            |> Seq.map encoding.GetString 
+            |> Seq.map (fun x -> x.Split("\n", StringSplitOptions.TrimEntries))
+            |> Seq.filter (fun x -> x.Length = 4)
+            |> List.ofSeq 
+
 type ExperimentalUdpClient (endpoint:IPEndPoint) =
     let encoding = Encoding.ASCII
     let udpClient = new UdpClient(endpoint.Port)
     do udpClient.Client.ReceiveTimeout <- 500
-    let local = IPEndPoint(IPAddress.Any, endpoint.Port)
+    //let local = IPEndPoint(IPAddress.Any, endpoint.Port)
     do udpClient.Connect(endpoint.Address, endpoint.Port)
-
-    let read () = 
-        try
-            udpClient.Receive(ref local) |> encoding.GetString |> Some
-        with 
-            | :? SocketException -> None
-
-    let readmany () = 
-        Seq.initInfinite (fun _ -> read ()) 
-        |> Seq.takeWhile Option.isSome 
-        |> Seq.choose id 
 
     let send cmd = 
         let sendBytes = encoding.GetBytes(cmd:string)
@@ -31,8 +51,11 @@ type ExperimentalUdpClient (endpoint:IPEndPoint) =
 
     member _.Raw cmd =
         send cmd
-        let raw = readmany ()
-        let result = raw |> Seq.toList
+        let result = 
+            udpClient
+            |> UdpUtils.readMany
+            |> Seq.map encoding.GetString
+            |> Seq.toList
         String.Join("", result).Trim()
 
     member _.Query cmd =
@@ -40,7 +63,9 @@ type ExperimentalUdpClient (endpoint:IPEndPoint) =
         let definition = toDef info
         if CommandType.canQuery info.Type |> not then failwith "Cant query"
         send definition.Query
-        readmany () 
+        udpClient
+            |> UdpUtils.readMany
+            |> Seq.map encoding.GetString
             |> Seq.scan (+) ""
             |> Seq.skip 1
             |> Seq.filter definition.HappyWithResponse

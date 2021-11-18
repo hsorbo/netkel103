@@ -137,7 +137,7 @@ module Wire =
         with 
             static member Mapping = [("CC", Cc);("CV", Cv);("CR", Cr);("CW", Cw)] |> Map.ofList
             static member Parse s = Map.find s Mode.Mapping
-
+    
     type CommandValue =
         | Nothing
         | StringValue of string
@@ -145,6 +145,14 @@ module Wire =
         | NumericValue of int
         | OnOffValue of OnOff
         | ModeValue of Mode
+    module CommandValue =
+        let asString = function
+            | FloatWithUnitValue(x, d) -> sprintf "%g%A"x d
+            | OnOffValue x -> sprintf "%s" (if x = On then "on" else "off")
+            | StringValue x -> sprintf "%s" x
+            | Nothing -> sprintf "Nothing"
+            | NumericValue x -> sprintf "%i" x
+            | ModeValue m -> sprintf "%A" m
 
     let private createResponse cmdType (value:string) =
         let sanitized = value.Trim()
