@@ -25,19 +25,19 @@ module NetworkUtils =
         Seq.initInfinite (fun _ -> read udpClient) |> Seq.takeWhile Option.isSome |> Seq.choose id
     
 
-    let searchNetkel () =
+    let searchNetkel () = seq {
         let encoding = Encoding.ASCII
         let src, dst = IPEndPoint(IPAddress.Any, 18191), IPEndPoint(IPAddress.Broadcast, 18191) 
         use udpClient = new UdpClient(src)
         udpClient.Send(encoding.GetBytes "find_ka000",dst) |> ignore
         udpClient.Client.ReceiveTimeout <- 1000;
-        udpClient 
+        yield! udpClient 
             |> readMany 
             |> Seq.map encoding.GetString 
             |> Seq.map (replace "\000" "" >> split "\n")
             |> Seq.filter (fun x -> x.Length = 3)
             |> Seq.map (join " ")
-            |> join Environment.NewLine
+        }   
 
 type ExperimentalUdpClient (endpoint:IPEndPoint) =
     let encoding = Encoding.ASCII
