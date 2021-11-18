@@ -5,6 +5,13 @@ open System.Text
 open System.Net.Sockets
 open NetKel103.Wire
 
+[<AutoOpen>]
+module StringUtils = 
+    let join (x:string) (y:string seq) = String.Join(x, y)
+    let trim (s:string) = s.Trim()
+    let split (splitOn:string) (s:string) = s.Split(splitOn, StringSplitOptions.RemoveEmptyEntries)
+    let replace (old:string) (rep:string) (s:string) = s.Replace(old, rep)
+
 module NetworkUtils =
     let read (udpClient:UdpClient) = 
         let mutable local = IPEndPoint(0, 0)
@@ -17,20 +24,6 @@ module NetworkUtils =
     let readMany udpClient =
         Seq.initInfinite (fun _ -> read udpClient) |> Seq.takeWhile Option.isSome |> Seq.choose id
     
-    // let private getBroadcastAddress (address:IPAddress) (mask:IPAddress) = 
-    //     let ipAddress = BitConverter.ToUInt32(address.GetAddressBytes(), 0)
-    //     let ipMaskV4 = BitConverter.ToUInt32(mask.GetAddressBytes(), 0)
-    //     let broadCastIpAddress = ipAddress ||| ~~~ipMaskV4
-    //     IPAddress(BitConverter.GetBytes(broadCastIpAddress))
-
-    // let getAllBroadcastAddresses () = 
-    //     NetworkInterface.GetAllNetworkInterfaces()
-    //     |> Seq.filter (fun x -> x.OperationalStatus = OperationalStatus.Up)
-    //     |> Seq.filter (fun x -> x.NetworkInterfaceType <> NetworkInterfaceType.Loopback)
-    //     |> Seq.collect (fun x -> x.GetIPProperties().UnicastAddresses)
-    //     |> Seq.map(fun x -> (x.Address, x.IPv4Mask))
-    //     |> Seq.filter (fun (x,_) -> x.AddressFamily = AddressFamily.InterNetwork)
-    //     |> Seq.map (fun (x,y) -> getBroadcastAddress x y)
 
     let searchNetkel () =
         let encoding = Encoding.ASCII
@@ -41,9 +34,10 @@ module NetworkUtils =
         udpClient 
             |> readMany 
             |> Seq.map encoding.GetString 
-            |> Seq.map (fun x -> x.Split("\n", StringSplitOptions.TrimEntries))
-            |> Seq.filter (fun x -> x.Length = 4)
-            |> List.ofSeq 
+            |> Seq.map (replace "\000" "" >> split "\n")
+            |> Seq.filter (fun x -> x.Length = 3)
+            |> Seq.map (join " ")
+            |> join Environment.NewLine
 
 type ExperimentalUdpClient (endpoint:IPEndPoint) =
     let encoding = Encoding.ASCII
@@ -59,12 +53,12 @@ type ExperimentalUdpClient (endpoint:IPEndPoint) =
 
     member _.Raw cmd =
         send cmd
-        let result = 
-            udpClient
+        udpClient
             |> NetworkUtils.readMany
             |> Seq.map encoding.GetString
             |> Seq.toList
-        String.Join("", result).Trim()
+            |> (join "")
+            |> trim
 
     member _.Query cmd =
         let info = toInfo cmd

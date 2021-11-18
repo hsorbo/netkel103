@@ -70,7 +70,7 @@ let main argv =
         |> Option.map (fun (ip, port) -> IPEndPoint(IPAddress.Parse(ip), port))
         |> Option.get
     if(cmd.Contains(Net_Detect)) then
-        NetworkUtils.searchNetkel () |> printfn "%A"
+        NetworkUtils.searchNetkel () |> printfn "%s"
     elif(cmd.Contains(Repl)) then
         use client = new ExperimentalUdpClient(getNetworkEndpoint ())
         repl client
