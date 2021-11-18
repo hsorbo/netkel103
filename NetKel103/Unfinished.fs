@@ -26,7 +26,7 @@ type ExperimentalUdpClient (endpoint:IPEndPoint) =
 
     let send cmd = 
         let sendBytes = encoding.GetBytes(cmd:string)
-        printfn "sending: %s" (cmd.Trim()) 
+        //printfn "sending: %s" (cmd.Trim()) 
         udpClient.Send(sendBytes, sendBytes.Length) |> ignore
 
     member _.Raw cmd =
@@ -36,8 +36,9 @@ type ExperimentalUdpClient (endpoint:IPEndPoint) =
         String.Join("", result).Trim()
 
     member _.Query cmd =
-        if canQuery cmd |> not then failwith "Cant query"
-        let definition = toDef cmd
+        let info = toInfo cmd
+        let definition = toDef info
+        if CommandType.canQuery info.Type |> not then failwith "Cant query"
         send definition.Query
         readmany () 
             |> Seq.scan (+) ""

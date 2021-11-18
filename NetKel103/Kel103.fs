@@ -14,6 +14,10 @@ module Wire =
         | Get of ValueType
         | Set
         | Both of ValueType
+    module CommandType =
+        let canQuery = function
+        | Set _ -> false
+        | _ -> true
 
     type Commands = 
         | ProductInformation
@@ -62,7 +66,10 @@ module Wire =
         | UndocumentedComp
         | UndocumentedExit
 
-    let knownCommands = [
+    type CommandInfo = { Command:Commands; Raw:string; Type:CommandType }
+
+    let knownCommands = 
+        [
         (ProductInformation      ,"*IDN",          Get(Text))
         (StoreToUnit             ,"*SAV",          Set) //<NR1> 1-100
         (RecallStorageUnit       ,"*RCL",          Set) //<NR1> 1-100
@@ -108,10 +115,10 @@ module Wire =
         (KeypadLock              ,":SYST:LOCK",    Both(OnOff)) 
         (UndocumentedComp        ,":COMP",         Both(Text)) 
         (UndocumentedExit        ,":EXIT",         Both(Text)) //ON|OFF
-    ]
+        ] |> List.map (fun (cmd,raw,cmdtype) -> {Command = cmd; Raw = raw; Type = cmdtype})
 
-    let private doDef (cmd:Commands) = 
-        knownCommands |> List.filter (fun (x, _, _) -> cmd = x) |> List.map (fun (_,y,z) -> (y,z)) |> List.exactlyOne
+    let toInfo (cmd:Commands) = 
+        knownCommands |> List.filter (fun x -> cmd = x.Command) |> List.exactlyOne
 
     type OnOff = | On | Off
         with 
@@ -160,21 +167,17 @@ module Wire =
         GenerateRaw:string->string
     }
 
-    let toDef cmd =
-        let prefix, cmdType = doDef cmd
+    let toDef (info:CommandInfo) =
         {
-            Prefix = prefix
-            Query = sprintf "%s?\n" prefix
-            Type = cmdType
-            ResponseHandler = (createResponse cmdType)
+            Prefix = info.Raw
+            Query = sprintf "%s?\n" info.Raw
+            Type = info.Type
+            ResponseHandler = (createResponse info.Type)
             HappyWithResponse = (fun x ->
-                match cmd with
+                match info.Command with
                 | SystemDeviceInfo -> x |> Seq.filter (fun x -> x = '\n') |> Seq.length > 6
                 | _ -> x.Contains("\n"))
-            GenerateRaw = (fun x -> sprintf "%s %s\n" prefix x )
+            GenerateRaw = (fun x -> sprintf "%s %s\n" info.Raw x )
         }
 
-    let canQuery cmd =
-        match (cmd |> doDef |> snd) with
-        | Set _ -> false
-        | _ -> true
+
