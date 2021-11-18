@@ -4,9 +4,8 @@ open System.Net
 open System.Text
 open System.Net.Sockets
 open NetKel103.Wire
-// https://www.eevblog.com/forum/testgear/review-of-the-korad-kel103-programmable-load/?all
 
-module UdpUtils =
+module NetworkUtils =
     let read (udpClient:UdpClient) = 
         let mutable local = IPEndPoint(0, 0)
         try
@@ -17,21 +16,30 @@ module UdpUtils =
     
     let readMany udpClient =
         Seq.initInfinite (fun _ -> read udpClient) |> Seq.takeWhile Option.isSome |> Seq.choose id
+    
+    // let private getBroadcastAddress (address:IPAddress) (mask:IPAddress) = 
+    //     let ipAddress = BitConverter.ToUInt32(address.GetAddressBytes(), 0)
+    //     let ipMaskV4 = BitConverter.ToUInt32(mask.GetAddressBytes(), 0)
+    //     let broadCastIpAddress = ipAddress ||| ~~~ipMaskV4
+    //     IPAddress(BitConverter.GetBytes(broadCastIpAddress))
 
-    //let readManyStrings (encoding:Text.Encoding) udpClient = readMany udpClient |> Seq.map encoding.GetString
-    //let readManyAscii x = readManyStrings Encoding.ASCII x
-module NetworkDetect = 
-    let detect (broadcastAddress : IPAddress) =
-        let encoding =  Encoding.ASCII
-        use udpClient = new UdpClient()
-        udpClient.Client.Bind(IPEndPoint(IPAddress.Any, 18191))
-        udpClient.Client.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.Broadcast, 1);
-        udpClient.Client.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.DontRoute, 1);
-        let s = encoding.GetBytes "find_ka000"
-        udpClient.Send(s, IPEndPoint(broadcastAddress, 18191)) |> ignore
+    // let getAllBroadcastAddresses () = 
+    //     NetworkInterface.GetAllNetworkInterfaces()
+    //     |> Seq.filter (fun x -> x.OperationalStatus = OperationalStatus.Up)
+    //     |> Seq.filter (fun x -> x.NetworkInterfaceType <> NetworkInterfaceType.Loopback)
+    //     |> Seq.collect (fun x -> x.GetIPProperties().UnicastAddresses)
+    //     |> Seq.map(fun x -> (x.Address, x.IPv4Mask))
+    //     |> Seq.filter (fun (x,_) -> x.AddressFamily = AddressFamily.InterNetwork)
+    //     |> Seq.map (fun (x,y) -> getBroadcastAddress x y)
+
+    let searchNetkel () =
+        let encoding = Encoding.ASCII
+        let src, dst = IPEndPoint(IPAddress.Any, 18191), IPEndPoint(IPAddress.Broadcast, 18191) 
+        use udpClient = new UdpClient(src)
+        udpClient.Send(encoding.GetBytes "find_ka000",dst) |> ignore
         udpClient.Client.ReceiveTimeout <- 1000;
         udpClient 
-            |> UdpUtils.readMany 
+            |> readMany 
             |> Seq.map encoding.GetString 
             |> Seq.map (fun x -> x.Split("\n", StringSplitOptions.TrimEntries))
             |> Seq.filter (fun x -> x.Length = 4)
@@ -53,7 +61,7 @@ type ExperimentalUdpClient (endpoint:IPEndPoint) =
         send cmd
         let result = 
             udpClient
-            |> UdpUtils.readMany
+            |> NetworkUtils.readMany
             |> Seq.map encoding.GetString
             |> Seq.toList
         String.Join("", result).Trim()
@@ -64,7 +72,7 @@ type ExperimentalUdpClient (endpoint:IPEndPoint) =
         if CommandType.canQuery info.Type |> not then failwith "Cant query"
         send definition.Query
         udpClient
-            |> UdpUtils.readMany
+            |> NetworkUtils.readMany
             |> Seq.map encoding.GetString
             |> Seq.scan (+) ""
             |> Seq.skip 1
