@@ -155,11 +155,20 @@ module Wire =
         | Cv
         | Cr
         | Cw
-        static member Mapping =
+
+    module Mode =
+        let Mapping =
             [ ("CC", Cc); ("CV", Cv); ("CR", Cr); ("CW", Cw) ]
             |> Map.ofList
 
-        static member Parse s = Map.find s Mode.Mapping
+        let Parse s = Map.find s Mapping
+
+        let asString =
+            function
+            | Cc -> "CC"
+            | Cv -> "Cv"
+            | Cr -> "CR"
+            | Cw -> "CW"
 
     type CommandValue =
         | Nothing

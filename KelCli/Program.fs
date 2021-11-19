@@ -22,6 +22,7 @@ type Arguments =
     | Ip of host: string * port: int
     | Serial of serial: string * baud: int
     | Get of string list
+    | Json
     | Repl
     | Net_Detect
     interface IArgParserTemplate with
@@ -31,13 +32,21 @@ type Arguments =
             | Serial _ -> "Serial connection"
             | Ip _ -> "Network connection"
             | Net_Detect -> "Search network"
+            | Json -> "json"
             | Get _ ->
                 queryCommands
                 |> List.map (fun x -> sprintf "%A" x.Command)
                 |> join "\n"
 
+let fromString<'a> (s: string) =
+    match FSharpType.GetUnionCases typeof<'a>
+          |> Array.filter (fun case -> case.Name = s)
+        with
+    | [| case |] -> Some(FSharpValue.MakeUnion(case, [||]) :?> 'a)
+    | _ -> None
 
-let repl (client: ExperimentalUdpClient) =
+
+let repl querier =
     ReadLine.AutoCompletionHandler <-
         { new IAutoCompleteHandler with
             member _.Separators = [| 'A' |]
@@ -58,15 +67,44 @@ let repl (client: ExperimentalUdpClient) =
     |> Seq.takeWhile (fun x -> x <> "exit")
     |> Seq.iter (fun cmd ->
         ReadLine.AddHistory cmd
-        client.Raw(sprintf "%s\n" cmd) |> printfn "%s")
+        querier (sprintf "%s\n" cmd) |> printfn "%s")
 
-let fromString<'a> (s: string) =
-    match FSharpType.GetUnionCases typeof<'a>
-          |> Array.filter (fun case -> case.Name = s)
-        with
-    | [| case |] -> Some(FSharpValue.MakeUnion(case, [||]) :?> 'a)
-    | _ -> None
+let query getList querier json =
+    let getList' =
+        if getList |> List.contains "all" then
+            queryCommands |> List.map (fun x -> x.Command)
+        else
+            getList
+            |> List.map fromString<Commands>
+            |> List.choose id
+            |> List.distinct
 
+    let m f x = (x, f x)
+    let sndf f (x, y) = (x, f y)
+    let fstf f (x, y) = (f x, y)
+
+    let queryResponse = getList' |> Seq.map (m querier)
+
+    let formatJsonValue =
+        function
+        | FloatWithUnitValue (x, d) -> box x
+        | OnOffValue x -> (if x = On then true else false)
+        | StringValue x -> x
+        | Nothing -> null
+        | NumericValue x -> x
+        | ModeValue m -> m |> Mode.asString |> box
+
+    if json |> not then
+        queryResponse
+        |> Seq.map (sndf CommandValue.asString)
+        |> Seq.iter (fun (cmd, resp) -> printfn "%A: %s" cmd resp)
+    else
+        queryResponse
+        |> Seq.map (fstf (sprintf "%A"))
+        |> Seq.map (sndf formatJsonValue)
+        |> Map.ofSeq
+        |> System.Text.Json.JsonSerializer.Serialize
+        |> printfn "%s"
 
 [<EntryPoint>]
 let main argv =
@@ -83,37 +121,21 @@ let main argv =
 
     let cmd = parser.ParseCommandLine()
 
-    let getNetworkEndpoint () =
-        cmd.TryGetResult Ip
-        |> Option.map (fun (ip, port) -> IPEndPoint(IPAddress.Parse(ip), port))
-        |> Option.get
-
     if (cmd.Contains(Net_Detect)) then
         printfn "Searching for KEL10x"
 
         NetworkUtils.searchNetkel ()
         |> Seq.iter (printfn "Found: %s")
-    elif (cmd.Contains(Repl)) then
-        use client = new ExperimentalUdpClient(getNetworkEndpoint ())
-        repl client
-    elif (cmd.Contains(Get)) then
-        let getList =
-            cmd.TryGetResult(Get)
-            |> Option.defaultValue List.empty
+    else
+        let ip, port = cmd.GetResult Ip
+        use client = new ExperimentalUdpClient(IPEndPoint(IPAddress.Parse(ip), port))
 
-        let getList' =
-            if getList |> List.contains "all" then
-                queryCommands |> List.map (fun x -> x.Command)
-            else
-                getList
-                |> List.map fromString<Commands>
-                |> List.choose id
-                |> List.distinct
-
-        for cmd in getList' do
-            use client = new ExperimentalUdpClient(getNetworkEndpoint ())
-            let response = client.Query(cmd)
-            printfn "%A: %s" cmd (CommandValue.asString response)
+        if (cmd.Contains(Repl)) then
+            repl client.Raw
+        elif (cmd.Contains(Get)) then
+            match cmd.TryGetResult(Get) with
+            | Some x -> query x client.Query (cmd.Contains(Json))
+            | None _ -> printfn "unable to get"
 
         ()
 
