@@ -85,23 +85,32 @@ let query getList querier json =
 
     let queryResponse = getList' |> Seq.map (m querier)
 
-    let formatJsonValue =
+    let format =
         function
-        | FloatWithUnitValue (x, d) -> box x
-        | OnOffValue x -> (if x = On then true else false)
-        | StringValue x -> x
-        | Nothing -> null
-        | NumericValue x -> x
-        | ModeValue m -> m |> Mode.asString |> box
+        | FloatWithUnitValue (x, d) -> (ConsoleColor.Blue, box x)
+        | OnOffValue x ->
+            (if x = On then
+                 (ConsoleColor.Green, true)
+             else
+                 (ConsoleColor.Red, false))
+        | StringValue x -> (ConsoleColor.Yellow, x)
+        | Nothing -> (ConsoleColor.Gray, null)
+        | NumericValue x -> (ConsoleColor.Magenta, x)
+        | ModeValue m -> (ConsoleColor.Cyan, m |> Mode.asString |> box)
 
     if json |> not then
         queryResponse
-        |> Seq.map (sndf CommandValue.asString)
-        |> Seq.iter (fun (cmd, resp) -> printfn "%A: %s" cmd resp)
+        |> Seq.map (sndf format)
+        |> Seq.iter (fun (cmd, (color, resp)) ->
+            let prev = Console.ForegroundColor
+            printf "%A: " cmd
+            Console.ForegroundColor <- color
+            printfn "%A" resp
+            Console.ForegroundColor <- prev)
     else
         queryResponse
         |> Seq.map (fstf (sprintf "%A"))
-        |> Seq.map (sndf formatJsonValue)
+        |> Seq.map (sndf (format >> snd))
         |> Map.ofSeq
         |> System.Text.Json.JsonSerializer.Serialize
         |> printfn "%s"
