@@ -85,31 +85,31 @@ let query getList querier json =
 
     let queryResponse = getList' |> Seq.map (fun x -> (x, querier x))
 
-    let format =
+    let colorize =
         function
-        | FloatWithUnitValue (x, d) -> (ConsoleColor.Blue, box x)
+        | FloatWithUnitValue (x, d) -> ConsoleColor.Blue
         | OnOffValue x ->
             match x with
-            | On -> (ConsoleColor.Green, true)
-            | Off -> (ConsoleColor.Red, false)
-        | StringValue x -> (ConsoleColor.Yellow, x)
-        | Nothing -> (ConsoleColor.Gray, null)
-        | NumericValue x -> (ConsoleColor.Magenta, x)
-        | ModeValue m -> (ConsoleColor.Cyan, m |> Mode.toString |> box)
+            | On -> ConsoleColor.Green
+            | Off -> ConsoleColor.Red
+        | StringValue x -> ConsoleColor.Yellow
+        | Nothing -> ConsoleColor.Gray
+        | NumericValue x -> ConsoleColor.Magenta
+        | ModeValue m -> ConsoleColor.Cyan
 
     if json |> not then
         queryResponse
-        |> Seq.map (sndMap format)
-        |> Seq.iter (fun (cmd, (color, resp)) ->
+        |> Seq.iter (fun (cmd, x) ->
+
             let prev = Console.ForegroundColor
             printf "%A: " cmd
-            Console.ForegroundColor <- color
-            printfn "%A" resp
+            Console.ForegroundColor <- colorize x
+            printfn "%s" (CommandValue.toString x)
             Console.ForegroundColor <- prev)
     else
         queryResponse
         |> Seq.map (fstMap (sprintf "%A"))
-        |> Seq.map (sndMap (format >> snd))
+        |> Seq.map (sndMap (CommandValue.toPrimitives))
         |> Map.ofSeq
         |> System.Text.Json.JsonSerializer.Serialize
         |> printfn "%s"
@@ -123,7 +123,6 @@ let setter setter key value =
         match CommandType.argType info.Type with
         | None -> failwith "no set"
         | Some x -> setter cmd (CommandValue.fromString value x)
-
 
     ()
 
@@ -149,6 +148,7 @@ let main argv =
         |> Seq.iter (printfn "Found: %s")
     else
         let ip, port = cmd.GetResult Ip
+
         use client = new ExperimentalUdpClient(IPEndPoint(IPAddress.Parse(ip), port))
 
         if (cmd.Contains(Repl)) then

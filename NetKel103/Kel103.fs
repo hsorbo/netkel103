@@ -242,6 +242,18 @@ module Wire =
             | Nothing -> ""
             | NumericValue x -> sprintf "%i" x
 
+        let toPrimitives =
+            function
+            | FloatWithUnitValue (x, d) -> box x
+            | OnOffValue x ->
+                match x with
+                | On -> true
+                | Off -> false
+            | StringValue x -> x
+            | Nothing -> null
+            | ModeValue m -> Mode.toString m
+            | NumericValue x -> x
+
     let private createResponse cmdType (value: string) =
         let responseType =
             match cmdType with
