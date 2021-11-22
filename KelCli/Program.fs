@@ -22,6 +22,7 @@ type Arguments =
     | Serial of serial: string * baud: int
     | Get of string list
     | Set of key: string * value: string
+    | Interval of int
     | Json
     | Repl
     | Net_Detect
@@ -33,6 +34,7 @@ type Arguments =
             | Ip _ -> "Network connection"
             | Net_Detect -> "Search network"
             | Json -> "json"
+            | Interval _ -> "query at interval"
             | Set _ ->
                 setCommands
                 |> List.map (fun x -> sprintf "%A" x.Command)
@@ -83,8 +85,6 @@ let query getList querier json =
             |> List.choose id
             |> List.distinct
 
-    let queryResponse = getList' |> Seq.map (fun x -> (x, querier x))
-
     let colorize =
         function
         | FloatWithUnitValue (x, d) -> ConsoleColor.Blue
@@ -97,7 +97,7 @@ let query getList querier json =
         | NumericValue x -> ConsoleColor.Magenta
         | ModeValue m -> ConsoleColor.Cyan
 
-    if json |> not then
+    let printConsole queryResponse =
         queryResponse
         |> Seq.iter (fun (cmd, x) ->
 
@@ -106,13 +106,34 @@ let query getList querier json =
             Console.ForegroundColor <- colorize x
             printfn "%s" (CommandValue.toString x)
             Console.ForegroundColor <- prev)
-    else
+
+    let printJson queryResponse =
         queryResponse
         |> Seq.map (fstMap (sprintf "%A"))
         |> Seq.map (sndMap (CommandValue.toPrimitives))
+        |> Seq.append [ ("timestamp", box DateTimeOffset.Now) ]
         |> Map.ofSeq
         |> System.Text.Json.JsonSerializer.Serialize
         |> printfn "%s"
+
+
+    let print =
+        if json |> not then
+            printConsole
+        else
+            printJson
+
+    getList'
+    |> Seq.map (fun x -> (x, querier x))
+    |> print
+
+
+let runInterval (interval: TimeSpan) func =
+    while true do
+        func ()
+
+        System.Threading.Thread.Sleep(int interval.TotalMilliseconds)
+        |> ignore
 
 let setter setter key value =
     match fromString<Commands> (key) with
@@ -155,7 +176,12 @@ let main argv =
             repl client.Raw
         elif (cmd.Contains(Get)) then
             match cmd.TryGetResult(Get) with
-            | Some x -> query x client.Query (cmd.Contains(Json))
+            | Some x ->
+                let q () = query x client.Query (cmd.Contains(Json))
+
+                match cmd.TryGetResult(Interval) with
+                | Some interval -> runInterval (TimeSpan.FromSeconds(interval)) q
+                | None -> q ()
             | None _ -> printfn "unable to get"
         elif (cmd.Contains(Set)) then
             match cmd.TryGetResult(Set) with
