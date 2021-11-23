@@ -245,10 +245,7 @@ module Wire =
         let toPrimitives =
             function
             | FloatWithUnitValue (x, d) -> box x
-            | OnOffValue x ->
-                match x with
-                | On -> true
-                | Off -> false
+            | OnOffValue x -> OnOff.toString x
             | StringValue x -> x
             | Nothing -> null
             | ModeValue m -> Mode.toString m
