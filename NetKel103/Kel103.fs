@@ -170,6 +170,7 @@ module Wire =
         | V
         | W
         | Ohm
+        | Minutes
 
     module Measure =
         let fromString =
@@ -179,6 +180,7 @@ module Wire =
             | "V" -> V
             | "W" -> W
             | "OHM" -> Ohm
+            | "M" -> Minutes
             | _ -> failwith "unknown string"
 
         let toString =
@@ -188,10 +190,12 @@ module Wire =
             | V -> "V"
             | W -> "W"
             | Ohm -> "OHM"
+            | Minutes -> "M"
 
         let parseSpecial s =
+
             let mtch =
-                Regex("^(?<number>(\d|\.)+)(?<unit>A|V|W|OHM|AH)$")
+                Regex("^(?<number>(\d|\.)+)(?<unit>A|V|W|OHM|AH|M)$")
                     .Match(s)
 
             (mtch.Groups.["number"].Value |> float, mtch.Groups.["unit"].Value |> fromString)
