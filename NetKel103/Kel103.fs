@@ -2,6 +2,17 @@
 
 open System
 
+module TextUtils =
+    open System.Text.RegularExpressions
+    let join (x: string) (y: string seq) = String.Join(x, y)
+    let trim (s: string) = s.Trim()
+    let split (splitOn: string) (s: string) = s.Split(splitOn, StringSplitOptions.RemoveEmptyEntries)
+    let replace (old: string) (rep: string) (s: string) = s.Replace(old, rep)
+
+    let rxmatch s (rx: Regex) =
+        let res = rx.Match s
+        if res.Success then Some res else None
+
 module Wire =
     open System.Text.RegularExpressions
 

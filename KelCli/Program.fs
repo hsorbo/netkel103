@@ -1,7 +1,8 @@
 open System
 open Argu
-open NetKel103.Unfinished
 open NetKel103.Wire
+open NetKel103.TextUtils
+open NetKel103
 
 open System.Net
 open Microsoft.FSharp.Reflection
@@ -166,7 +167,7 @@ let main argv =
         printfn "Searching for KEL10x"
 
         NetworkUtils.searchNetkel ()
-        |> Seq.iter (printfn "Found: %s")
+        |> Seq.iter (printfn "Found: %A")
     else
         let ip, port = cmd.GetResult Ip
 
